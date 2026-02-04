@@ -2,7 +2,7 @@ name = "storyteller-orchestrator"
 main = "src/worker.ts"
 compatibility_date = "2024-01-01"
 
-[migrations]
+[[migrations]]
 tag = "v1"
 new_classes = ["JobStateMachine"]
 
