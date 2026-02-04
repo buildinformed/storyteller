@@ -1,93 +1,165 @@
+import type { DurableObjectState, Queue } from './cf-types';
+import {
+  buildDefaultConfig,
+  JobState,
+  STEP_ORDER,
+  StepType,
+} from './types';
+
 export interface Env {
-  jobStateMachine: DurableObjectNamespace;
-  media_steps: Queue;
-  storyteller_artifacts: R2Bucket;
+  STEP_QUEUE: Queue;
 }
 
-export class JobStateMachine {
-  private state: any;
+export class JobController {
+  private readonly state: DurableObjectState;
+  private readonly env: Env;
 
   constructor(state: DurableObjectState, env: Env) {
-    this.state = {
-      jobId: state.id.name,
-      status: 'pending',
-      config: {} as any,
-      artifacts: {},
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
+    this.state = state;
+    this.env = env;
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const method = request.method;
 
-    if (method === 'POST' && url.pathname === '/start') {
-      return this.handleStart(request);
-    } else if (method === 'POST' && url.pathname === '/complete') {
-      return this.handleComplete(request);
-    } else if (method === 'GET' && url.pathname === '/status') {
-      return this.handleStatus();
-    } else {
-      return new Response('Not found', { status: 404 });
+    if (method === 'POST' && url.pathname === '/init') {
+      return this.handleInit(request);
     }
+
+    if (method === 'POST' && url.pathname === '/complete') {
+      return this.handleComplete(request);
+    }
+
+    if (method === 'GET' && url.pathname === '/status') {
+      return this.handleStatus();
+    }
+
+    return new Response('Not found', { status: 404 });
   }
 
-  private async handleStart(request: Request): Promise<Response> {
+  private async handleInit(request: Request): Promise<Response> {
     const body = await request.json();
-    this.state.config = body.config;
-    this.state.status = 'pending';
-    this.state.updatedAt = Date.now();
+    const job = await this.loadState();
 
-    await this.state.env.media_steps.send({
-      jobId: this.state.jobId,
-      step: 'generate_story',
-      payload: body.config,
-    });
+    if (job.status === 'running') {
+      return Response.json({ status: 'already-running', jobId: job.jobId }, { status: 409 });
+    }
 
-    return Response.json({ status: 'started', jobId: this.state.jobId });
+    const config = body?.config ?? buildDefaultConfig();
+    const now = Date.now();
+
+    const updated: JobState = {
+      ...job,
+      status: 'running',
+      config,
+      currentStep: STEP_ORDER[0],
+      stepStatus: STEP_ORDER.reduce((acc, step) => {
+        acc[step] = 'pending';
+        return acc;
+      }, {} as JobState['stepStatus']),
+      error: undefined,
+      createdAt: job.createdAt || now,
+      updatedAt: now,
+    };
+
+    await this.saveState(updated);
+    await this.enqueueStep(updated.jobId, updated.currentStep);
+
+    return Response.json({ status: 'started', jobId: updated.jobId });
   }
 
   private async handleComplete(request: Request): Promise<Response> {
     const body = await request.json();
-    this.state.artifacts = { ...this.state.artifacts, ...body.artifacts };
-    this.state.status = body.artifacts.video ? 'completed' : 'assembling';
-    this.state.updatedAt = Date.now();
+    const job = await this.loadState();
+    const step = body?.step as StepType | undefined;
 
-    if (body.artifacts.video) {
-      await this.state.env.media_steps.send({
-        jobId: this.state.jobId,
-        step: 'assemble_video',
-        payload: { videoUrl: body.artifacts.video },
-      });
+    if (!step) {
+      return new Response('step is required', { status: 400 });
     }
 
-    return Response.json({ status: 'updated', jobId: this.state.jobId });
+    const now = Date.now();
+    const artifacts = { ...job.artifacts, ...body.artifacts };
+    const stepStatus = { ...job.stepStatus };
+
+    if (body?.error) {
+      stepStatus[step] = 'failed';
+      const failed: JobState = {
+        ...job,
+        status: 'failed',
+        error: String(body.error),
+        artifacts,
+        stepStatus,
+        updatedAt: now,
+      };
+      await this.saveState(failed);
+      return Response.json({ status: 'failed', jobId: job.jobId });
+    }
+
+    stepStatus[step] = 'completed';
+    const nextStep = this.nextStep(step);
+
+    const updated: JobState = {
+      ...job,
+      artifacts,
+      stepStatus,
+      currentStep: nextStep,
+      status: nextStep ? 'running' : 'completed',
+      updatedAt: now,
+    };
+
+    await this.saveState(updated);
+
+    if (nextStep) {
+      await this.enqueueStep(updated.jobId, nextStep);
+    }
+
+    return Response.json({ status: updated.status, jobId: updated.jobId });
   }
 
   private async handleStatus(): Promise<Response> {
-    return Response.json({
-      jobId: this.state.jobId,
-      status: this.state.status,
-      config: this.state.config,
-      artifacts: this.state.artifacts,
-      error: this.state.error,
-      createdAt: this.state.createdAt,
-      updatedAt: this.state.updatedAt,
-    });
+    const job = await this.loadState();
+    return Response.json(job);
   }
 
-  async updateState(updates: any): Promise<void> {
-    Object.assign(this.state, updates);
-    this.state.updatedAt = Date.now();
+  private nextStep(step: StepType): StepType | null {
+    const index = STEP_ORDER.indexOf(step);
+    if (index < 0 || index >= STEP_ORDER.length - 1) {
+      return null;
+    }
+    return STEP_ORDER[index + 1];
   }
 
-  async setState(state: any): Promise<void> {
-    this.state = state;
-    this.state.updatedAt = Date.now();
+  private async enqueueStep(jobId: string, step: StepType | null): Promise<void> {
+    if (!step) {
+      return;
+    }
+    await this.env.STEP_QUEUE.send({ jobId, step });
   }
 
-  getState(): any {
-    return { ...this.state };
+  private async loadState(): Promise<JobState> {
+    const stored = await this.state.storage.get<JobState>('job');
+    if (stored) {
+      return stored;
+    }
+
+    const now = Date.now();
+    return {
+      jobId: this.state.id.toString(),
+      status: 'pending',
+      currentStep: null,
+      config: buildDefaultConfig(),
+      artifacts: {},
+      stepStatus: STEP_ORDER.reduce((acc, step) => {
+        acc[step] = 'pending';
+        return acc;
+      }, {} as JobState['stepStatus']),
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  private async saveState(job: JobState): Promise<void> {
+    await this.state.storage.put('job', job);
   }
 }

@@ -3,17 +3,17 @@ main = "src/worker.ts"
 compatibility_date = "2024-01-01"
 
 [[migrations]]
-tag = "v1"
-new_classes = ["JobStateMachine"]
+tag = "v2"
+new_classes = ["JobController"]
 
 # Durable Object binding
 [[durable_objects.bindings]]
-name = "jobStateMachine"
-class_name = "JobStateMachine"
+name = "JOBS"
+class_name = "JobController"
 
 # Queue binding - producer
 [[queues.producers]]
-binding = "media_steps"
+binding = "STEP_QUEUE"
 queue = "media-steps"
 
 # Queue binding - consumer
@@ -25,5 +25,5 @@ max_concurrency = 250
 
 # R2 binding
 [[r2_buckets]]
-binding = "bucket"
+binding = "ARTIFACTS"
 bucket_name = "storyteller-artifacts"
