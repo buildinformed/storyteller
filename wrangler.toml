@@ -6,6 +6,12 @@ compatibility_date = "2024-01-01"
 tag = "v2"
 new_classes = ["JobController"]
 
+[[migrations]]
+tag = "v3"
+rename_classes = [
+	{ from = "JobStateMachine", to = "JobController" }
+]
+
 # Durable Object binding
 [[durable_objects.bindings]]
 name = "JOBS"
