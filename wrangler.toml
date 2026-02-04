@@ -6,7 +6,6 @@ compatibility_date = "2024-01-01"
 [[durable_objects.bindings]]
 name = "jobStateMachine"
 class_name = "JobStateMachine"
-script_name = "storyteller-orchestrator"
 
 # Queue binding - producer
 [[queues.producers]]
