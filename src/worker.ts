@@ -32,4 +32,32 @@ export default {
       return new Response('Not found', { status: 404 });
     }
   },
+  async queue(batch: any, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      const body = message.body as {
+        jobId?: string;
+        step?: string;
+        payload?: unknown;
+      };
+
+      if (!body?.jobId) {
+        console.warn('Queue message missing jobId', body);
+        continue;
+      }
+
+      const state = env.jobStateMachine.idFromName(body.jobId);
+      const stub = env.jobStateMachine.get(state);
+
+      await stub.fetch(
+        'https://internal/complete',
+        new Request('https://internal/complete', {
+          method: 'POST',
+          body: JSON.stringify({
+            step: body.step,
+            payload: body.payload,
+          }),
+        })
+      );
+    }
+  },
 };
