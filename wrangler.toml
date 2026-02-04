@@ -1,4 +1,4 @@
-name = "storyteller-orchestrator"
+name = "storyteller"
 main = "src/worker.ts"
 compatibility_date = "2024-01-01"
 
