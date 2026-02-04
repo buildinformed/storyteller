@@ -163,3 +163,6 @@ export class JobController {
     await this.state.storage.put('job', job);
   }
 }
+
+// Backwards-compatible export for existing Durable Object class name
+export class JobStateMachine extends JobController {}
