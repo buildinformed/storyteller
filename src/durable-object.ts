@@ -4,30 +4,8 @@ export interface Env {
   storyteller_artifacts: R2Bucket;
 }
 
-interface WorkflowState {
-  jobId: string;
-  status: 'pending' | 'generating_story' | 'generating_images' | 'generating_audio' | 'generating_music' | 'animating' | 'assembling' | 'completed' | 'failed';
-  config: {
-    storyPrompt: string;
-    numImages: number;
-    voice: string;
-    musicStyle: string;
-    animate: boolean;
-  };
-  artifacts: {
-    storyText?: string;
-    images?: string[];
-    audio?: string[];
-    music?: string;
-    video?: string;
-  };
-  error?: string;
-  createdAt: number;
-  updatedAt: number;
-}
-
 export class JobStateMachine {
-  private state: WorkflowState;
+  private state: any;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = {
@@ -61,7 +39,6 @@ export class JobStateMachine {
     this.state.status = 'pending';
     this.state.updatedAt = Date.now();
 
-    // Send first step to queue
     await this.state.env.media_steps.send({
       jobId: this.state.jobId,
       step: 'generate_story',
@@ -77,7 +54,6 @@ export class JobStateMachine {
     this.state.status = body.artifacts.video ? 'completed' : 'assembling';
     this.state.updatedAt = Date.now();
 
-    // If video is ready, send to queue for final assembly
     if (body.artifacts.video) {
       await this.state.env.media_steps.send({
         jobId: this.state.jobId,
@@ -101,18 +77,17 @@ export class JobStateMachine {
     });
   }
 
-  // Called by queue consumers to update state
-  async updateState(updates: Partial<WorkflowState>): Promise<void> {
+  async updateState(updates: any): Promise<void> {
     Object.assign(this.state, updates);
     this.state.updatedAt = Date.now();
   }
 
-  async setState(state: WorkflowState): Promise<void> {
+  async setState(state: any): Promise<void> {
     this.state = state;
     this.state.updatedAt = Date.now();
   }
 
-  getState(): WorkflowState {
+  getState(): any {
     return { ...this.state };
   }
 }
