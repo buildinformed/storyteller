@@ -22,4 +22,4 @@ max_concurrency = 250
 
 # R2 binding
 [[r2_buckets.bindings]]
-bucket = "storyteller-artifacts"
+bucket = ["storyteller-artifacts"]
