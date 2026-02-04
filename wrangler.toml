@@ -20,7 +20,7 @@ queue = "media-steps"
 [[queues.consumers]]
 queue = "media-steps"
 max_batch_size = 1
-max_batch_timeout = 30000
+max_batch_timeout = 60
 max_concurrency = 250
 
 # R2 binding
