@@ -8,10 +8,12 @@ name = "jobStateMachine"
 class_name = "JobStateMachine"
 script_name = "storyteller-orchestrator"
 
-# Queue binding
+# Queue binding - producer
 [[queues.producers]]
+binding = "media_steps"
 queue = "media-steps"
 
+# Queue binding - consumer
 [[queues.consumers]]
 queue = "media-steps"
 max_batch_size = 1
