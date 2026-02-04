@@ -1,5 +1,5 @@
 import type { DurableObjectNamespace, MessageBatch, Queue, R2Bucket } from './cf-types';
-import { JobController } from './durable-object';
+import { JobController, JobStateMachine } from './durable-object';
 import { runStep } from './steps';
 import { buildDefaultConfig, JobState, QueueMessage, StepType } from './types';
 
@@ -9,7 +9,7 @@ export interface Env {
   ARTIFACTS: R2Bucket;
 }
 
-export { JobController };
+export { JobController, JobStateMachine };
 
 function jsonResponse(payload: unknown, status = 200): Response {
   return new Response(JSON.stringify(payload, null, 2), {
