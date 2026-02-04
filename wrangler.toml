@@ -2,6 +2,10 @@ name = "storyteller-orchestrator"
 main = "src/worker.ts"
 compatibility_date = "2024-01-01"
 
+[migrations]
+tag = "v1"
+new_classes = ["JobStateMachine"]
+
 # Durable Object binding
 [[durable_objects.bindings]]
 name = "jobStateMachine"
