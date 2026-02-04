@@ -1,1 +1,23 @@
-test
+name = "storyteller-orchestrator"
+main = "src/worker.ts"
+compatibility_date = "2024-01-01"
+
+# Durable Object binding
+[[durable_objects.bindings]]
+name = "jobStateMachine"
+class_name = "JobStateMachine"
+script_name = "storyteller-orchestrator"
+
+# Queue binding
+[[queues.producers]]
+queue = "media-steps"
+
+[[queues.consumers]]
+queue = "media-steps"
+max_batch_size = 1
+max_batch_timeout = 30000
+max_concurrency = 250
+
+# R2 binding
+[[r2_buckets.bindings]]
+bucket = "storyteller-artifacts"
