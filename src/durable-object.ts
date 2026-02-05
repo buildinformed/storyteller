@@ -47,10 +47,12 @@ export class JobController {
     }
 
     const config = body?.config ?? buildDefaultConfig();
+    const jobId = body?.jobId ?? job.jobId;
     const now = Date.now();
 
     const updated: JobState = {
       ...job,
+      jobId,
       status: 'running',
       config,
       currentStep: STEP_ORDER[0],

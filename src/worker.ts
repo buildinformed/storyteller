@@ -72,7 +72,7 @@ export default {
       const stub = env.JOBS.get(state);
       await stub.fetch('https://internal/init', {
         method: 'POST',
-        body: JSON.stringify({ config }),
+        body: JSON.stringify({ jobId, config }),
       });
 
       return jsonResponse({ jobId });
@@ -87,6 +87,36 @@ export default {
       const state = env.JOBS.idFromName(jobId);
       const stub = env.JOBS.get(state);
       return stub.fetch('https://internal/status');
+    }
+
+    if (url.pathname.startsWith('/jobs/') && request.method === 'POST') {
+      const parts = url.pathname.split('/');
+      const jobId = parts[2];
+      const action = parts[3];
+      if (action !== 'debug-run') {
+        return new Response('Not found', { status: 404 });
+      }
+
+      const step = url.searchParams.get('step');
+      if (!jobId || !step || !isStepType(step)) {
+        return new Response('jobId and step are required', { status: 400 });
+      }
+
+      try {
+        const job = await getJobState(env, jobId);
+        const artifacts = await runStep(step, jobId, job.config, job.artifacts, {
+          ARTIFACTS: env.ARTIFACTS,
+        });
+
+        await completeStep(env, jobId, { step, artifacts });
+        return jsonResponse({ status: 'ok', jobId, step });
+      } catch (error) {
+        await completeStep(env, jobId, {
+          step,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return jsonResponse({ status: 'error', jobId, step }, 500);
+      }
     }
 
     return new Response('Not found', { status: 404 });
